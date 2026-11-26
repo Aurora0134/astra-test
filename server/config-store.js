@@ -214,7 +214,8 @@ export class ConfigStore {
           scope: 'CurrentUser',
           blob: Buffer.isBuffer(cipher) ? cipher.toString('base64') : String(cipher)
         };
-        apiKeyHint = value.slice(-4);
+        // 短 Key 的末 4 位可能等于完整明文，此时不写提示尾号。
+        apiKeyHint = value.length > 8 ? value.slice(-4) : '';
       }
     }
 
