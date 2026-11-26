@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>astra 测试</title>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <header class="page-header">
+    <h1 class="product-name">astra 测试</h1>
+    <p class="product-summary">检查 OpenAI 兼容上游的可用性、指令遵循与输出质量。</p>
+  </header>
+
+  <main class="page-main">
+    <section class="panel config-card" id="config-card" aria-labelledby="config-title">
+      <div class="panel-head">
+        <h2 class="panel-title" id="config-title">连接配置</h2>
+        <div class="panel-head-meta">
+          <span class="storage-state" id="storage-state" data-tone="info">正在检查加密存储…</span>
+          <p class="panel-note">API Key 仅在本机加密保存，不会回传页面。</p>
+        </div>
+      </div>
+      <form class="config-form" id="config-form" autocomplete="off" novalidate>
+        <div class="field field-base-url">
+          <label class="field-label" for="base-url">服务地址</label>
+          <input class="input" id="base-url" name="baseUrl" type="url" inputmode="url" placeholder="https://api.example.com/v1" spellcheck="false">
+        </div>
+
+        <div class="field field-api-key">
+          <label class="field-label" for="api-key">API Key</label>
+          <div class="input-row">
+            <input class="input" id="api-key" name="apiKey" type="password" placeholder="输入新的 API Key" autocomplete="new-password" spellcheck="false">
+            <button class="btn btn-ghost" id="toggle-key" type="button" aria-label="显示 API Key" aria-pressed="false">显示</button>
+          </div>
+          <p class="field-hint" id="key-hint">正在读取配置。</p>
+        </div>
+
+        <div class="field field-model">
+          <label class="field-label" for="model">模型</label>
+          <div class="input-row">
+            <input class="input" id="model" name="model" type="text" list="model-options" placeholder="gpt-4.1" spellcheck="false">
+            <button class="btn btn-ghost" id="fetch-models" type="button">获取模型列表</button>
+          </div>
+          <datalist id="model-options"></datalist>
+        </div>
+
+        <fieldset class="field field-effort">
+          <legend class="field-label">推理强度</legend>
+          <div class="segmented" id="effort-group"></div>
+        </fieldset>
+
+        <div class="config-actions">
+          <button class="btn btn-primary" id="save-config" type="submit">保存配置</button>
+          <button class="btn btn-danger" id="clear-config" type="button">清空配置</button>
+        </div>
+
+        <p class="status-line" id="config-status" role="status" aria-live="polite">正在读取配置…</p>
+      </form>
+    </section>
+
+    <section class="panel results-panel" aria-labelledby="results-title">
+      <div class="toolbar">
+        <div class="toolbar-heading">
+          <h2 class="panel-title" id="results-title">测试结果</h2>
+          <p class="progress" id="run-progress">已完成 0 / 5</p>
+        </div>
+        <div class="toolbar-actions">
+          <button class="btn btn-primary" id="start-run" type="button">开始测试</button>
+          <button class="btn" id="stop-run" type="button" disabled>停止</button>
+          <button class="btn" id="clear-results" type="button">清除结果</button>
+        </div>
+      </div>
+      <div class="card-grid" id="result-cards"></div>
+    </section>
+  </main>
+
+  <noscript>
+    <p class="noscript">页面需要启用 JavaScript 才能运行测试。</p>
+  </noscript>
+
+  <script type="module" src="./app.js"></script>
+</body>
+</html>
