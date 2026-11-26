@@ -88,12 +88,7 @@ body {
 }
 
 .config-card {
-  position: sticky;
-  top: 10px;
-  z-index: 20;
-  max-height: calc(100vh - 20px);
   padding: 16px 20px 14px;
-  overflow: auto;
   background: rgba(255, 255, 255, 0.97);
   backdrop-filter: blur(10px);
 }
@@ -701,10 +696,6 @@ details[open] > .raw-summary::before {
     padding-top: 22px;
   }
 
-  .config-card {
-    max-height: 62vh;
-  }
-
   .config-form {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -736,10 +727,6 @@ details[open] > .raw-summary::before {
 }
 
 @media (max-width: 620px) {
-  .config-card {
-    max-height: 58vh;
-  }
-
   .config-form {
     grid-template-columns: minmax(0, 1fr);
   }

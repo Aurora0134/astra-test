@@ -1,9 +1,10 @@
-// 页面编排：串行执行 5 项测试、停止、清除结果与进度文案。
+// 页面编排：五项测试并行发起，各自可中止；进度按已完成数递增。
 
-import { TESTS, STATUS } from './tests.js';
+import { TESTS } from './tests.js';
 import { runTest } from './api.js';
 import { createConfigPanel } from './config.js';
 import { createResultBoard } from './results.js';
+import { countCompleted, createRunCoordinator } from './runner.js';
 
 const startButton = document.getElementById('start-run');
 const stopButton = document.getElementById('stop-run');
@@ -20,16 +21,20 @@ const TERMINAL_MESSAGES = {
   empty_response: '上游返回空内容。'
 };
 
-let busy = false;
-let stopRequested = false;
-let controller = null;
 let configState = { ready: false, reason: '正在读取配置。' };
-let idleWaiters = [];
 
 const board = createResultBoard({
   root: cardsRoot,
   onRetest: function (testId) {
-    retest(testId);
+    coordinator.runOne(testId);
+  }
+});
+
+const coordinator = createRunCoordinator({
+  tests: TESTS,
+  execute: runTestJob,
+  onChange: function () {
+    syncControls();
   }
 });
 
@@ -53,117 +58,70 @@ function describeError(event) {
 }
 
 function updateProgress() {
-  const statuses = board.getStatuses();
-  const completed = statuses.filter(function (status) {
-    return status !== STATUS.IDLE && status !== STATUS.RUNNING;
-  }).length;
-  progressLabel.textContent = '已完成 ' + completed + ' / ' + TESTS.length;
+  progressLabel.textContent = '已完成 ' + countCompleted(board.getStatuses()) + ' / ' + TESTS.length;
 }
 
 function syncControls() {
-  startButton.disabled = busy || !configState.ready;
-  stopButton.disabled = !busy;
-  board.setRetestEnabled(!busy && configState.ready);
+  const running = coordinator.hasActiveRuns();
+  startButton.disabled = running || !configState.ready;
+  stopButton.disabled = !running;
+  // 重新测试按卡片独立判断：该卡自己在跑时才不可用，其它卡的状态不影响它。
+  board.setRetestEnabled(function (testId) {
+    return configState.ready && !coordinator.isRunning(testId);
+  });
   updateProgress();
 }
 
-function waitForIdle() {
-  if (!busy) return Promise.resolve();
-  return new Promise(function (resolve) {
-    idleWaiters.push(resolve);
-  });
-}
-
-function flushIdleWaiters() {
-  const waiters = idleWaiters;
-  idleWaiters = [];
-  waiters.forEach(function (resolve) { resolve(); });
-}
-
-async function runOne(testId) {
-  const test = TESTS.find(function (item) { return item.id === testId; });
-  if (!test) return;
-  controller = new AbortController();
-  board.begin(testId);
+async function runTestJob(job) {
+  const test = TESTS.find(function (item) { return item.id === job.testId; });
+  if (!test) throw new Error('未知的测试项。');
+  board.begin(test.id);
   updateProgress();
   let terminal = null;
   try {
     terminal = await runTest({
       testId: test.id,
       prompt: test.prompt,
-      signal: controller.signal,
+      signal: job.signal,
       onEvent: function (event) {
         if (!event || typeof event !== 'object') return;
-        if (event.type === 'start') board.applyStart(testId, event);
-        else if (event.type === 'delta') board.append(testId, event.text || '');
+        if (event.type === 'start') board.applyStart(test.id, event);
+        else if (event.type === 'delta') board.append(test.id, event.text || '');
       }
     });
-    if (terminal && terminal.type === 'done') board.complete(testId, terminal);
-    else if (terminal && terminal.type === 'error') board.fail(testId, describeError(terminal));
-    else board.fail(testId, '测试连接中断，未能收到完整结果。');
+    if (terminal && terminal.type === 'done') board.complete(test.id, terminal);
+    else if (terminal && terminal.type === 'error') board.fail(test.id, describeError(terminal));
+    else board.fail(test.id, '测试连接中断，未能收到完整结果。');
   } catch (error) {
-    if (error && error.code === 'aborted') board.fail(testId, '已停止测试。');
-    else board.fail(testId, error && error.message ? error.message : '请求失败，请重试。');
+    if (error && error.code === 'aborted') board.fail(test.id, '已停止测试。');
+    else board.fail(test.id, error && error.message ? error.message : '请求失败，请重试。');
   } finally {
-    controller = null;
     updateProgress();
   }
 }
 
-async function startSequence() {
-  if (busy || !configState.ready) return;
-  busy = true;
-  stopRequested = false;
-  syncControls();
-  try {
-    for (let index = 0; index < TESTS.length; index += 1) {
-      if (stopRequested) break;
-      await runOne(TESTS[index].id);
-    }
-  } finally {
-    busy = false;
-    stopRequested = false;
-    controller = null;
-    syncControls();
-    flushIdleWaiters();
-  }
-}
-
-async function retest(testId) {
-  if (busy || !configState.ready) return;
-  busy = true;
-  stopRequested = false;
-  syncControls();
-  try {
-    await runOne(testId);
-  } finally {
-    busy = false;
-    stopRequested = false;
-    controller = null;
-    syncControls();
-    flushIdleWaiters();
-  }
+function startRun() {
+  if (!configState.ready || coordinator.hasActiveRuns()) return;
+  coordinator.runAll();
 }
 
 function stopRun() {
-  if (!busy) return;
-  stopRequested = true;
-  if (controller) controller.abort();
+  if (!coordinator.hasActiveRuns()) return;
+  coordinator.stopAll();
   syncControls();
 }
 
 async function clearResults() {
-  if (busy) {
-    stopRequested = true;
-    if (controller) controller.abort();
-    await waitForIdle();
+  if (coordinator.hasActiveRuns()) {
+    coordinator.stopAll();
+    await coordinator.whenIdle();
   }
   board.resetAll();
   updateProgress();
   syncControls();
 }
 
-startButton.addEventListener('click', startSequence);
+startButton.addEventListener('click', startRun);
 stopButton.addEventListener('click', stopRun);
 clearButton.addEventListener('click', clearResults);
 

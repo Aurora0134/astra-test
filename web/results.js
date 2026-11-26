@@ -247,9 +247,13 @@ export function createResultBoard(options) {
     return Array.from(cards.values()).map(function (card) { return card.state.status; });
   }
 
-  function setRetestEnabled(enabled) {
+  // 重新测试按卡片独立启用：只有该卡自身在跑时才不可用。
+  function setRetestEnabled(isEnabled) {
+    const check = typeof isEnabled === 'function'
+      ? isEnabled
+      : function () { return Boolean(isEnabled); };
     cards.forEach(function (card) {
-      card.retestButton.disabled = !enabled;
+      card.retestButton.disabled = !check(card.test.id, card.state.status);
     });
   }
 
