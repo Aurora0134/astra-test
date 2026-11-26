@@ -19,12 +19,45 @@ export const CANDY_PROMPT = [
   '直接回答数字，禁止输出任何其他内容'
 ].join('\n');
 
+// 问答项的关键词判定配置：口径来自产品定义，逐条对应一条用户规则。
+export const KEYWORD_MODES = Object.freeze({
+  SEQUENCE: 'sequence',
+  CHARACTERS: 'characters'
+});
+
+// 问答 A 的约定问候语，字符逐字固定（含全角波浪线、∠、・、ω、⌒、☆ 与括号内的半角空格）。
+export const CIALLO_KEYWORD = 'Ciallo～(∠・ω< )⌒☆';
+
+// 问答 C 的约定姓名。
+export const PRIME_MINISTER_KEYWORD = '高市早苗';
+
+// 问答 B 要求同时出现的三个字，不要求连续，也不要求成词。
+export const DINGDONG_CHARACTERS = Object.freeze(['大', '狗', '叫']);
+
+// 只有问答 A 的两段式匹配容忍空白差异；问答 C 按原文包含判断。
+const CIALLO_EXPECTATION = Object.freeze({
+  mode: KEYWORD_MODES.SEQUENCE,
+  keyword: CIALLO_KEYWORD,
+  ignoreWhitespace: true
+});
+
+const DINGDONG_EXPECTATION = Object.freeze({
+  mode: KEYWORD_MODES.CHARACTERS,
+  characters: DINGDONG_CHARACTERS
+});
+
+const PRIME_MINISTER_EXPECTATION = Object.freeze({
+  mode: KEYWORD_MODES.SEQUENCE,
+  keyword: PRIME_MINISTER_KEYWORD,
+  ignoreWhitespace: false
+});
+
 export const TESTS = Object.freeze([
   Object.freeze({ id: 'pelican', title: '鹈鹕测试', kind: 'svg', prompt: PELICAN_PROMPT }),
   Object.freeze({ id: 'candy', title: '糖果测试', kind: 'candy', prompt: CANDY_PROMPT }),
-  Object.freeze({ id: 'a', title: '问答 A · ciallo', kind: 'text', prompt: 'ciallo' }),
-  Object.freeze({ id: 'b', title: '问答 B · 叮咚鸡', kind: 'text', prompt: '叮咚鸡' }),
-  Object.freeze({ id: 'c', title: '问答 C · 现任日本首相', kind: 'text', prompt: '仅凭你的记忆，直接回答现在的日本首相是谁' })
+  Object.freeze({ id: 'a', title: '问答 A · ciallo', kind: 'text', prompt: 'ciallo', expect: CIALLO_EXPECTATION }),
+  Object.freeze({ id: 'b', title: '问答 B · 叮咚鸡', kind: 'text', prompt: '叮咚鸡', expect: DINGDONG_EXPECTATION }),
+  Object.freeze({ id: 'c', title: '问答 C · 现任日本首相', kind: 'text', prompt: '仅凭你的记忆，直接回答现在的日本首相是谁', expect: PRIME_MINISTER_EXPECTATION })
 ]);
 
 export const REASONING_EFFORTS = Object.freeze([
@@ -95,13 +128,51 @@ export function judgeCandyAnswer(text) {
   return extractCandyAnswer(text) === CANDY_EXPECTED ? STATUS.PASS : STATUS.FAIL;
 }
 
+// 去掉全部空白字符（含全角空格、制表符、换行），供忽略空白差异的匹配使用。
+export function stripWhitespace(text) {
+  if (typeof text !== 'string') return '';
+  return text.replace(/\s+/g, '');
+}
+
+// 关键词命中判断，只按配置的规则判定，不做任何字面归一化（不做大小写、全半角、繁简转换）。
+// sequence：包含判断；ignoreWhitespace 为真时，未命中再对「去掉全部空白」的两侧做包含判断。
+// characters：要求每个字都出现，不要求连续、不要求成词。
+export function matchesExpectation(text, expectation) {
+  if (typeof text !== 'string' || text === '') return false;
+  const expect = expectation || null;
+  if (!expect) return false;
+  if (expect.mode === KEYWORD_MODES.CHARACTERS) {
+    const characters = Array.isArray(expect.characters) ? expect.characters : [];
+    if (characters.length === 0) return false;
+    return characters.every(function (character) {
+      return typeof character === 'string' && character !== '' && text.indexOf(character) !== -1;
+    });
+  }
+  const keyword = typeof expect.keyword === 'string' ? expect.keyword : '';
+  if (keyword === '') return false;
+  if (text.indexOf(keyword) !== -1) return true;
+  if (expect.ignoreWhitespace !== true) return false;
+  const compactKeyword = stripWhitespace(keyword);
+  if (compactKeyword === '') return false;
+  return stripWhitespace(text).indexOf(compactKeyword) !== -1;
+}
+
+// 问答项判定：命中为通过，未命中为未通过。正文为空属于输出异常，由 resolveStatus 先行拦截。
+export function judgeKeywordAnswer(text, expectation) {
+  return matchesExpectation(text, expectation) ? STATUS.PASS : STATUS.FAIL;
+}
+
 // 单项结束后的判定。svg 类型由调用方给出渲染结果，避免本模块依赖 DOM。
-export function resolveStatus(kind, outcome) {
+// text 类型传入 expect 时按关键词规则判通过/未通过；空正文与请求失败仍是输出异常。
+export function resolveStatus(kind, outcome, expectation) {
   const result = outcome || {};
   if (result.failed) return STATUS.ANOMALY;
   if (kind === 'candy') return judgeCandyAnswer(result.text);
   if (kind === 'svg') return result.svgRendered === true ? STATUS.OK : STATUS.ANOMALY;
-  return typeof result.text === 'string' && result.text.trim() !== '' ? STATUS.OK : STATUS.ANOMALY;
+  const text = typeof result.text === 'string' ? result.text : '';
+  if (text.trim() === '') return STATUS.ANOMALY;
+  if (expectation) return judgeKeywordAnswer(text, expectation);
+  return STATUS.OK;
 }
 
 export function formatDuration(milliseconds) {

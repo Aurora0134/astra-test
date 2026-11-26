@@ -7,6 +7,7 @@ import {
   CANDY_EXPECTED,
   highlightForStatus,
   extractCandyAnswer,
+  judgeKeywordAnswer,
   effortLabel,
   formatDuration,
   formatTokens
@@ -21,6 +22,11 @@ export function formatEffortMeta(done) {
   const sent = typeof done.effortSent === 'string' ? done.effortSent.trim() : '';
   if (sent !== '') return '推理强度 ' + level + '（已降级·实际发送 ' + sent + '）';
   return '推理强度 ' + level + '（已降级·未发送该参数）';
+}
+
+// 问答项的判定文案，与糖果卡使用同一句式和同一套配色语义。
+export function describeKeywordVerdict(passed) {
+  return passed ? '判定：通过' : '判定：未通过';
 }
 
 function element(tag, className, text) {
@@ -187,6 +193,19 @@ export function createResultBoard(options) {
     return wrapper;
   }
 
+  // 问答卡的答案区：正文原文 + 判定行；未通过时补一句规则说明。
+  function buildKeywordAnswer(text, passed) {
+    const wrapper = element('div', 'candy-answer');
+    wrapper.appendChild(element('pre', 'answer-text', text));
+    const verdict = element('p', 'candy-verdict', describeKeywordVerdict(passed));
+    verdict.dataset.tone = passed ? 'pass' : 'fail';
+    wrapper.appendChild(verdict);
+    if (!passed) {
+      wrapper.appendChild(element('p', 'answer-hint', '答案未满足该项判定规则。'));
+    }
+    return wrapper;
+  }
+
   function complete(testId, done) {
     const card = cards.get(testId);
     if (!card) return;
@@ -215,6 +234,10 @@ export function createResultBoard(options) {
       card.answer.replaceChildren(element('p', 'answer-note answer-note--warn', '上游未返回正文。'));
       setStatus(card, STATUS.ANOMALY);
       card.rawBlock.open = true;
+    } else if (card.test.expect) {
+      const passed = judgeKeywordAnswer(text, card.test.expect) === STATUS.PASS;
+      card.answer.replaceChildren(buildKeywordAnswer(text, passed));
+      setStatus(card, passed ? STATUS.PASS : STATUS.FAIL);
     } else {
       card.answer.replaceChildren(element('pre', 'answer-text', text));
       setStatus(card, STATUS.OK);
