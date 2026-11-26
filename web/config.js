@@ -110,7 +110,10 @@ export function createConfigPanel(options) {
   }
 
   function statusContent(state) {
-    if (!saved) return { text: '正在读取配置…', tone: 'info' };
+    if (!saved) {
+      if (message !== '' && tone === 'error') return { text: message, tone: 'error' };
+      return { text: '正在读取配置…', tone: 'info' };
+    }
     if (busy) return { text: '正在处理配置…', tone: 'info' };
     if (saved.storage === 'unavailable') {
       return { text: '当前系统不支持加密存储，配置无法保存。', tone: 'error' };
@@ -126,6 +129,11 @@ export function createConfigPanel(options) {
   function renderStorageState() {
     if (!storageState) return;
     if (!saved) {
+      if (message !== '' && tone === 'error') {
+        storageState.textContent = '加密存储状态未知';
+        storageState.dataset.tone = 'error';
+        return;
+      }
       storageState.textContent = '正在检查加密存储…';
       storageState.dataset.tone = 'info';
       return;
@@ -295,6 +303,7 @@ export function createConfigPanel(options) {
     } catch (error) {
       message = '读取配置失败：' + readError(error);
       tone = 'error';
+      keyHint.textContent = '未能读取已保存的配置。';
       render();
     }
   }

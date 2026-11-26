@@ -78,7 +78,7 @@ export function createResultBoard(options) {
       rawBlock: rawBlock,
       rawText: rawText,
       retestButton: retestButton,
-      state: { status: STATUS.IDLE, text: '' }
+      state: { status: STATUS.IDLE, text: '', metaInfo: { model: '', effort: '' } }
     };
   }
 
@@ -114,6 +114,7 @@ export function createResultBoard(options) {
   function resetCard(card) {
     card.state.text = '';
     card.state.status = STATUS.IDLE;
+    card.state.metaInfo = { model: '', effort: '' };
     card.node.dataset.status = STATUS.IDLE;
     card.node.dataset.highlight = 'none';
     card.badge.textContent = STATUS_LABELS.idle;
@@ -137,6 +138,10 @@ export function createResultBoard(options) {
   function applyStart(testId, event) {
     const card = cards.get(testId);
     if (!card || !event) return;
+    card.state.metaInfo = {
+      model: typeof event.model === 'string' ? event.model : '',
+      effort: typeof event.reasoningEffort === 'string' ? event.reasoningEffort : ''
+    };
     const parts = [];
     if (typeof event.model === 'string' && event.model !== '') parts.push('模型 ' + event.model);
     if (typeof event.reasoningEffort === 'string' && event.reasoningEffort !== '') {
@@ -212,6 +217,12 @@ export function createResultBoard(options) {
     const card = cards.get(testId);
     if (!card) return;
     const text = typeof messageText === 'string' && messageText !== '' ? messageText : '测试失败。';
+    const metaParts = [];
+    if (card.state.metaInfo.model !== '') metaParts.push('模型 ' + card.state.metaInfo.model);
+    if (card.state.metaInfo.effort !== '') metaParts.push('推理强度 ' + effortLabel(card.state.metaInfo.effort));
+    metaParts.push(text.indexOf('已停止') !== -1 ? '已停止' : '测试失败');
+    card.meta.textContent = metaParts.join(' · ');
+    card.meta.removeAttribute('title');
     setStatus(card, STATUS.ANOMALY);
     card.answer.replaceChildren(element('p', 'answer-note answer-note--warn', text));
     card.rawText.textContent = card.state.text;

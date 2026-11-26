@@ -80,7 +80,10 @@ export async function saveConfig(payload) {
 }
 
 export async function clearConfig() {
-  await requestJson('/api/config', { method: 'DELETE', headers: { Accept: 'application/json' } });
+  await requestJson('/api/config', {
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json' }
+  });
 }
 
 export async function loadModels() {
