@@ -3,3 +3,13 @@ data/
 *.log
 Thumbs.db
 .DS_Store
+
+# 测试用例仅存本地开发环境，不入仓库
+tests/
+
+# 防止真实配置与密钥文件被误提交
+config.json
+.env*
+*.key
+*.pem
+config.json.tmp-*

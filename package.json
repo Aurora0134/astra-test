@@ -4,12 +4,21 @@
   "private": true,
   "description": "本地运行的 OpenAI 兼容上游测试台",
   "type": "module",
+  "license": "Apache-2.0",
+  "author": "Aurora0134",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Aurora0134/astra-test.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Aurora0134/astra-test/issues"
+  },
+  "homepage": "https://github.com/Aurora0134/astra-test#readme",
   "engines": {
-    "node": ">=20"
+    "node": ">=22"
   },
   "scripts": {
     "start": "node server/index.js",
-    "mock": "node tools/mock-upstream.js",
-    "test": "node --test \"tests/**/*.test.mjs\""
+    "mock": "node tools/mock-upstream.js"
   }
 }
