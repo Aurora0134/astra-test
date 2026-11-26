@@ -38,6 +38,9 @@ export function normalizeBaseUrl(value) {
   if (!trimmed) {
     return '';
   }
+  if (trimmed.length > 2048) {
+    throw new ConfigError('invalid_base_url', '服务地址过长，最多 2048 字符');
+  }
   if (!/^https?:\/\//i.test(trimmed)) {
     throw new ConfigError('invalid_base_url', '服务地址必须以 http:// 或 https:// 开头');
   }
@@ -75,7 +78,11 @@ function normalizeModel(value) {
   if (typeof value !== 'string') {
     throw new ConfigError('invalid_body', '模型名称必须是文本');
   }
-  return value.trim();
+  const trimmed = value.trim();
+  if (trimmed.length > 256) {
+    throw new ConfigError('invalid_model', '模型名称过长，最多 256 字符');
+  }
+  return trimmed;
 }
 
 function isPlainObject(value) {
@@ -89,13 +96,25 @@ function normalizeStoredApiKey(value) {
   return null;
 }
 
+function normalizeStoredBaseUrl(value) {
+  if (typeof value !== 'string' || value === '') {
+    return '';
+  }
+  try {
+    return normalizeBaseUrl(value);
+  } catch {
+    // 历史落盘数据中的服务地址不合法时按未配置处理，不中断服务。
+    return '';
+  }
+}
+
 function normalizeStoredRecord(data) {
   if (!isPlainObject(data)) {
     return null;
   }
   return {
     version: Number.isInteger(data.version) ? data.version : CONFIG_VERSION,
-    baseUrl: typeof data.baseUrl === 'string' ? data.baseUrl : '',
+    baseUrl: normalizeStoredBaseUrl(data.baseUrl),
     model: typeof data.model === 'string' ? data.model : '',
     reasoningEffort: REASONING_EFFORTS.includes(data.reasoningEffort)
       ? data.reasoningEffort
@@ -193,6 +212,9 @@ export class ConfigStore {
       const value = input.apiKey;
       if (typeof value !== 'string') {
         throw new ConfigError('invalid_body', 'API Key 必须是文本');
+      }
+      if (value.length > 4096) {
+        throw new ConfigError('invalid_body', 'API Key 过长，最多 4096 字符');
       }
       if (value === '') {
         apiKey = null;

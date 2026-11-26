@@ -15,6 +15,10 @@ const RETRYABLE_STATUS = new Set([400, 422]);
 const EFFORT_REJECTION_PATTERN = /reasoning|effort|thinking|unsupported|invalid/i;
 const ERROR_DETAIL_LIMIT = 500;
 const JSON_BODY_READ_LIMIT = 5 * 1024 * 1024;
+// 畸形上游的内存防线：单行上限、单事件行数上限、正文累计上限。
+const MAX_SSE_LINE_CHARS = 1024 * 1024;
+const MAX_SSE_DATA_LINES = 64;
+const MAX_RESPONSE_CHARS = 2 * 1024 * 1024;
 
 /**
  * 整体超时；环境变量 ASTRA_TIMEOUT_MS 可覆盖。
@@ -164,7 +168,29 @@ function normalizeUsage(usage) {
 
 async function readTextSafe(response, limit) {
   try {
-    const text = await response.text();
+    if (!response.body) {
+      return '';
+    }
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder('utf-8');
+    let text = '';
+    let received = 0;
+    while (received < limit) {
+      const chunk = await reader.read();
+      if (chunk.value) {
+        received += chunk.value.length;
+        text += decoder.decode(chunk.value, { stream: true });
+      }
+      if (chunk.done) {
+        text += decoder.decode();
+        break;
+      }
+    }
+    try {
+      await reader.cancel();
+    } catch {
+      // 读取结束后的取消失败可以忽略。
+    }
     return text.length <= limit ? text : text.slice(0, limit);
   } catch {
     return '';
@@ -239,7 +265,9 @@ async function consumeSse(response, handlers) {
       value = value.slice(1);
     }
     if (field === 'data') {
-      dataLines.push(value);
+      if (value.length <= MAX_SSE_LINE_CHARS && dataLines.length < MAX_SSE_DATA_LINES) {
+        dataLines.push(value);
+      }
     }
   };
 
@@ -248,6 +276,11 @@ async function consumeSse(response, handlers) {
       const chunk = await reader.read();
       if (chunk.value) {
         buffer += decoder.decode(chunk.value, { stream: true });
+      }
+      if (buffer.length > MAX_SSE_LINE_CHARS) {
+        // 无换行的超长内容按畸形数据处理，丢弃后等待下一行。
+        const newlineIndex = buffer.indexOf('\n');
+        buffer = newlineIndex === -1 ? '' : buffer.slice(newlineIndex + 1);
       }
       let newlineIndex;
       while (!finished && (newlineIndex = buffer.indexOf('\n')) !== -1) {
@@ -470,8 +503,13 @@ export async function runTest(options = {}) {
         if (contentType.includes('text/event-stream')) {
           await consumeSse(response, {
             onText: (chunk) => {
-              text += chunk;
-              emit({ type: 'delta', text: chunk });
+              if (text.length >= MAX_RESPONSE_CHARS) {
+                return;
+              }
+              const room = MAX_RESPONSE_CHARS - text.length;
+              const piece = room >= chunk.length ? chunk : chunk.slice(0, room);
+              text += piece;
+              emit({ type: 'delta', text: piece });
             },
             onReasoning: (chunk) => {
               reasoningChars += chunk.length;

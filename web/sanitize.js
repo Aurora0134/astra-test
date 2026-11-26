@@ -52,6 +52,13 @@ export function sanitizeSvg(svgElement) {
   Array.from(svgElement.querySelectorAll(DANGEROUS_SELECTOR)).forEach(function (node) {
     node.remove();
   });
+  // 动画不得改写链接目标，防止展示内容在点击后跳转到站外。
+  Array.from(svgElement.querySelectorAll('animate, set')).forEach(function (node) {
+    const target = (node.getAttribute('attributeName') || '').trim().toLowerCase();
+    if (target === 'href' || target === 'xlink:href') {
+      node.remove();
+    }
+  });
   const elements = [svgElement].concat(Array.from(svgElement.querySelectorAll('*')));
   elements.forEach(function (element) {
     if (!element || element.nodeType !== 1) return;

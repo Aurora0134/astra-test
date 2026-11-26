@@ -485,7 +485,7 @@ function listenOnce(server, port) {
 }
 
 /**
- * 端口被占用时顺延尝试后续端口（默认 10 个）；端口 0 交给系统分配。
+ * 端口被占用或被系统保留时顺延尝试后续端口（默认 10 个）；端口 0 交给系统分配。
  * @param {http.Server} server
  * @param {number} basePort
  * @param {number} [fallbackCount]
@@ -503,7 +503,7 @@ export async function listenWithFallback(server, basePort, fallbackCount = PORT_
     try {
       return await listenOnce(server, candidate);
     } catch (error) {
-      if (!error || error.code !== 'EADDRINUSE') {
+      if (!error || (error.code !== 'EADDRINUSE' && error.code !== 'EACCES')) {
         throw error;
       }
     }
