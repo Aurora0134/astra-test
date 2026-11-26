@@ -13,6 +13,16 @@ import {
 } from './tests.js';
 import { renderSvgInto } from './sanitize.js';
 
+// 推理强度的展示文案：降级时注明实际发送值，未降级只显示配置档位。
+export function formatEffortMeta(done) {
+  if (!done || typeof done.reasoningEffort !== 'string' || done.reasoningEffort === '') return '';
+  const level = effortLabel(done.reasoningEffort);
+  if (done.degraded !== true) return '推理强度 ' + level;
+  const sent = typeof done.effortSent === 'string' ? done.effortSent.trim() : '';
+  if (sent !== '') return '推理强度 ' + level + '（已降级·实际发送 ' + sent + '）';
+  return '推理强度 ' + level + '（已降级·未发送该参数）';
+}
+
 function element(tag, className, text) {
   const node = document.createElement(tag);
   if (className) node.className = className;
@@ -97,9 +107,8 @@ export function createResultBoard(options) {
   function setMeta(card, done) {
     const parts = [];
     if (done && typeof done.model === 'string' && done.model !== '') parts.push('模型 ' + done.model);
-    if (done && typeof done.reasoningEffort === 'string' && done.reasoningEffort !== '') {
-      parts.push('推理强度 ' + effortLabel(done.reasoningEffort) + (done.degraded ? '（已降级）' : ''));
-    }
+    const effortText = formatEffortMeta(done);
+    if (effortText !== '') parts.push(effortText);
     if (done && Number.isFinite(done.durationMs)) parts.push('耗时 ' + formatDuration(done.durationMs));
     const tokens = done ? formatTokens(done.usage) : '';
     if (tokens !== '') parts.push('Token ' + tokens);
